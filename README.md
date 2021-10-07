@@ -1,7 +1,7 @@
 # exploreML
 Interactive bokeh dashboard for analyzing active learning experiments and matrix completion models
 
-![Active Explore Demo](data/demo.gif)
+![Active Explore Demo](exploreML/data/demo.gif)
 
 ## Requirements
 bokeh == 2.4.0 <br>
@@ -29,6 +29,7 @@ data_dict, sampling_dict = loadActiveH5()
 
 row_name = 'compound'
 col_name = 'gene'
+
 # Interactive dashboard saved as: active_explorer.html
 active = ActiveExplore(data_dict, sampling_dict,row_name=row_name,col_name=col_name)
 ```
