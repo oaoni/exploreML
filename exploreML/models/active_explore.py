@@ -34,12 +34,12 @@ class ActiveExplore:
     plot_location: location of plots with respect to heatmap ['below','left','right','above']
     """
 
-    def __init__(self, data_dict, sampling_dict, is_sym=True, num_line_plots=2,
+    def __init__(self, data_dict, sampling_dict, is_sym=False, num_line_plots=2,
                  clust_methods = ['None','ward','average'], init_clust = 'None',
                  active_x='active_iter', batch_col='batch', row_coord = 'row_idx', col_coord = 'col_idx',
                  row_name='dim1', col_name='dim2', val_name='query_value',
                  heatmap_colors = 'default', n_colors=10, inds_colors=[1,2,4,5,6,7,8],
-                 color_palette='Category10',plot_size=700,
+                 color_palette='Category10',plot_size=700, line_width=500, line_height=300,
                  name='active explorer', url='active_explorer.html', plot_location='below'):
 
         M = data_dict['M']
@@ -206,7 +206,8 @@ class ActiveExplore:
 
         # List of Lists: [Fig, and dictionary of lineplots for each sampler, tabs] ->
         # for each predefined line_y_keys
-        line_plots = [self._createLinePlot(y_key, samplerCol_meta, active_x, sampling_names, active_sources, sampler_color) for y_key in line_y_keys]
+        line_plots = [self._createLinePlot(y_key, samplerCol_meta, active_x, sampling_names,
+                      active_sources, sampler_color, line_width, line_height) for y_key in line_y_keys]
 
         with open('exploreML/exploreML/models/active_explore_js/radio_call.js','r') as f:
             radio_call_js = f.read()
@@ -316,7 +317,7 @@ class ActiveExplore:
         return line_select
 
     #Line figure
-    def _createLinePlot(self, y_key, key_meta, active_x, sampling_names, active_sources, sampler_color):
+    def _createLinePlot(self, y_key, key_meta, active_x, sampling_names, active_sources, sampler_color, line_width, line_height):
 
         #Create panels for linear and log tabs
         panels = []
@@ -324,7 +325,7 @@ class ActiveExplore:
         lines = []
 
         for axis_type in ['log','linear']:
-            Fig = figure(width=600, height=300,toolbar_location='above',
+            Fig = figure(width=line_width, height=line_height,toolbar_location='above',
                          x_range=(0,key_meta[active_x]['max']+(key_meta[active_x]['max']*0.05)),
                          y_range=(key_meta[y_key]['min'], key_meta[y_key]['max']+(key_meta[y_key]['max']*0.05)),
                          y_axis_type=axis_type)
