@@ -10,10 +10,10 @@ ColorPicker, Panel, Tabs, RangeSlider, FixedTicker, Select, LinearColorMapper
 from bokeh.palettes import all_palettes
 from scipy.cluster.hierarchy import linkage, dendrogram
 
-with open('exploreML/exploreML/models/active_explore_js/slider_callback.js','r') as f:
+with open('exploreML/models/active_explore_js/slider_callback.js','r') as f:
     slider_callback_js = f.read()
 
-with open('exploreML/exploreML/models/active_explore_js/line_callback.js','r') as f:
+with open('exploreML/models/active_explore_js/line_callback.js','r') as f:
     line_callback_js = f.read()
 
 class ActiveExplore:
@@ -208,7 +208,7 @@ class ActiveExplore:
                       active_sources, sampler_color, line_width, line_height) for y_key in line_y_keys]
         self.line_plots = line_plots
 
-        with open('exploreML/exploreML/models/active_explore_js/radio_call.js','r') as f:
+        with open('exploreML/models/active_explore_js/radio_call.js','r') as f:
             radio_call_js = f.read()
 
         radio_call = CustomJS(args=dict(methods=clust_methods,clust_dict=clust_dict,plot=p,
@@ -242,7 +242,7 @@ class ActiveExplore:
             plot.visible = cb_obj.active;
         """))
 
-        with open('exploreML/exploreML/models/active_explore_js/data_toggle.js','r') as f:
+        with open('exploreML/models/active_explore_js/data_toggle.js','r') as f:
             data_toggle_js = f.read()
 
         data_toggle = Toggle(label="Show All (Toggle)", button_type="primary")
@@ -325,7 +325,7 @@ class ActiveExplore:
         panels = []
         figs = []
         lines = []
-        
+
         for fig_type in ['square','line']:
             Fig = figure(width=line_width, height=line_height,toolbar_location='above',
                          x_range=(0,key_meta[active_x]['max']+(key_meta[active_x]['max']*0.05)),
