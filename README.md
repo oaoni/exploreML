@@ -1,7 +1,7 @@
 # exploreML
 Interactive bokeh dashboard for analyzing active learning experiments and matrix completion models
 
-![Active Explore Demo](exploreML/data/demo.gif)
+![Active Explore Demo](data/demo.gif)
 
 ## Requirements
 bokeh == 2.4.0 <br>
