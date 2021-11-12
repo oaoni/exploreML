@@ -96,16 +96,14 @@ class ActiveExplore:
         samplerCol_meta = pd.concat([sampling_data[sampler].describe().loc[['min','max'],:]\
          for sampler in sampling_names]).describe().to_dict()
 
-        self.samplerCol_meta = samplerCol_meta
-
         # Column source data of mask for each clustering method
         upper_dict = {method:self._makeGImatrix(self._makeMaskUpper(M.iloc[clust_dict[method][0],clust_dict[method][1]]),meta_vars)\
                    .dropna(axis=0).to_dict(orient='list') for method in clust_methods}
 
         #Collecting the quantitative columns from the sampling data
-        quant_options = sampling_methods[0].describe().columns.to_list()
+        quant_options = sampling_methods[0].describe().T.query('std > 0').index.to_list()
 
-        line_y_keys = [col for col in quant_options[-self.numLinePlots:]]
+        line_y_keys = [col for col in quant_options[:self.numLinePlots]]
 
         # Make sources
         heat_mapper = LinearColorMapper(palette=heatmap_colors,low=M.values.min(), high=M.values.max())
@@ -208,6 +206,7 @@ class ActiveExplore:
         # for each predefined line_y_keys
         line_plots = [self._createLinePlot(y_key, samplerCol_meta, active_x, sampling_names,
                       active_sources, sampler_color, line_width, line_height) for y_key in line_y_keys]
+        self.line_plots = line_plots
 
         with open('exploreML/exploreML/models/active_explore_js/radio_call.js','r') as f:
             radio_call_js = f.read()
@@ -267,6 +266,7 @@ class ActiveExplore:
 
         layout = self._make_layout(heatmap_layout,linePlots, plot_location)
 
+
         save(layout)
 
     def _make_layout(self, heatmap_layout, linePlots, plot_location):
@@ -319,22 +319,26 @@ class ActiveExplore:
     #Line figure
     def _createLinePlot(self, y_key, key_meta, active_x, sampling_names, active_sources, sampler_color, line_width, line_height):
 
+        print(y_key, active_x, sampling_names, active_sources,
+              sampler_color, line_width, line_height,'\n')
         #Create panels for linear and log tabs
         panels = []
         figs = []
         lines = []
-
-        for axis_type in ['log','linear']:
+        
+        for fig_type in ['square','line']:
             Fig = figure(width=line_width, height=line_height,toolbar_location='above',
                          x_range=(0,key_meta[active_x]['max']+(key_meta[active_x]['max']*0.05)),
                          y_range=(key_meta[y_key]['min'], key_meta[y_key]['max']+(key_meta[y_key]['max']*0.05)),
-                         y_axis_type=axis_type)
+                         y_axis_type='linear',output_backend="webgl")
 
-            Figs = {sampler:Fig.line(active_x, y_key,\
+            Figs = {sampler:getattr(Fig,fig_type)(active_x, y_key,\
                                              source=active_sources[sampler],\
                                              color=sampler_color[sampler],\
                                              legend_label=sampler, line_width=2)\
                                              for sampler in sampling_names}
+
+
             Fig.xaxis.axis_label = active_x
             Fig.yaxis.axis_label = y_key
 
@@ -343,7 +347,7 @@ class ActiveExplore:
             Fig.add_layout(Fig.legend[0], 'below')
             Fig.legend.click_policy="hide"
 
-            panel = Panel(child=Fig, title=axis_type.capitalize())
+            panel = Panel(child=Fig, title=fig_type.capitalize())
             panels.append(panel)
 
             figs.append(Fig)
