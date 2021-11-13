@@ -274,16 +274,16 @@ class ActiveExplore:
         elif (plot_location == 'left') | (plot_location == 'right'):
             line_layout = column(*linePlots)
 
-        if plot_location == 'right': #Right
+        if plot_location == 'right': # Right
             layout = row(heatmap_layout, line_layout)
 
-        elif plot_location == 'left': #Left
+        elif plot_location == 'left': # Left
             layout = row(line_layout, heatmap_layout)
 
-        elif plot_location == 'above': #Above
+        elif plot_location == 'above': # Above
             layout = column(line_layout, heatmap_layout)
 
-        elif plot_location == 'below': #Above
+        elif plot_location == 'below': # Below
             layout = column(heatmap_layout,line_layout)
 
         return layout
@@ -322,22 +322,16 @@ class ActiveExplore:
         figs = []
         lines = []
 
-        for fig_type in ['square','line']:
+        for fig_type in [{'glyph':'square','name':'Scatter','size':1},{'glyph':'line','name':'Line','size':2}]:
             Fig = figure(width=line_width, height=line_height,toolbar_location='above',
                          x_range=(0,key_meta[active_x]['max']+(key_meta[active_x]['max']*0.05)),
                          y_range=(key_meta[y_key]['min'], key_meta[y_key]['max']+(key_meta[y_key]['max']*0.05)),
                          y_axis_type='linear',output_backend="webgl")
 
-            # Figs = {sampler:getattr(Fig,fig_type)(active_x, y_key,\
-            #                                  source=active_sources[sampler],\
-            #                                  color=sampler_color[sampler],\
-            #                                  legend_label=sampler, line_width=2)\
-            #                                  for sampler in sampling_names}
-
-            Figs = {sampler:getattr(Fig,fig_type)(active_x, y_key,\
+            Figs = {sampler:getattr(Fig,fig_type['glyph'])(active_x, y_key,\
                                              source=active_sources[sampler],\
                                              color=sampler_color[sampler],\
-                                             line_width=2)\
+                                             line_width=fig_type['size'])\
                                              for sampler in sampling_names}
 
             legend_factor = (50*(line_width/500))
@@ -371,12 +365,7 @@ class ActiveExplore:
             Fig.xaxis.axis_label = active_x
             Fig.yaxis.axis_label = y_key
 
-            # Fig.legend.orientation="horizontal"
-            # Fig.legend.location=(0,0)
-            # Fig.add_layout(Fig.legend[0], 'below')
-            # Fig.legend.click_policy="hide"
-
-            panel = Panel(child=Fig, title=fig_type.capitalize())
+            panel = Panel(child=Fig, title=fig_type['name'].capitalize())
             panels.append(panel)
 
             figs.append(Fig)
