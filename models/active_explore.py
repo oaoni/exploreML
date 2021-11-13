@@ -1,6 +1,7 @@
 import numpy as np
 import pandas as pd
 import seaborn as sns
+import math
 from bokeh.io import output_notebook, show, save
 from bokeh.plotting import figure, Figure, output_file, show, reset_output
 from bokeh.layouts import column, row
@@ -146,8 +147,6 @@ class ActiveExplore:
                              location=(0,0), ticker=BasicTicker(),
                              width=15,label_standoff=7)
 
-
-
         self.color_bar = color_bar
         p.add_layout(color_bar, "right")
 
@@ -266,7 +265,6 @@ class ActiveExplore:
 
         layout = self._make_layout(heatmap_layout,linePlots, plot_location)
 
-
         save(layout)
 
     def _make_layout(self, heatmap_layout, linePlots, plot_location):
@@ -319,8 +317,6 @@ class ActiveExplore:
     #Line figure
     def _createLinePlot(self, y_key, key_meta, active_x, sampling_names, active_sources, sampler_color, line_width, line_height):
 
-        print(y_key, active_x, sampling_names, active_sources,
-              sampler_color, line_width, line_height,'\n')
         #Create panels for linear and log tabs
         panels = []
         figs = []
@@ -332,20 +328,53 @@ class ActiveExplore:
                          y_range=(key_meta[y_key]['min'], key_meta[y_key]['max']+(key_meta[y_key]['max']*0.05)),
                          y_axis_type='linear',output_backend="webgl")
 
+            # Figs = {sampler:getattr(Fig,fig_type)(active_x, y_key,\
+            #                                  source=active_sources[sampler],\
+            #                                  color=sampler_color[sampler],\
+            #                                  legend_label=sampler, line_width=2)\
+            #                                  for sampler in sampling_names}
+
             Figs = {sampler:getattr(Fig,fig_type)(active_x, y_key,\
                                              source=active_sources[sampler],\
                                              color=sampler_color[sampler],\
-                                             legend_label=sampler, line_width=2)\
+                                             line_width=2)\
                                              for sampler in sampling_names}
 
+            legend_factor = (50*(line_width/500))
+            n_legend_rows = np.ceil(len(''.join(sampling_names))/legend_factor)
+
+            Legends = list(Figs.items())
+
+            if n_legend_rows > 1:
+                idx = math.ceil(len(Legends)/2)
+                Legends1 = Legends[:idx]
+                Legends2 = Legends[idx:]
+
+                legend1 = Legend(items=[(sampler, [glyph]) for sampler, glyph in Legends1],\
+                          location=(0,0), orientation='horizontal',padding=0,margin=0)
+                legend2 = Legend(items=[(sampler, [glyph]) for sampler, glyph in Legends2],\
+                          location=(0,0), orientation='horizontal',padding=0,margin=0)
+
+                Fig.add_layout(legend1, 'below')
+                Fig.add_layout(legend2, 'below')
+                Fig.legend.click_policy="hide"
+
+            else:
+                legend1 = Legend(items=[(sampler, [glyph]) for sampler, glyph in Legends],\
+                          location=(0,0), orientation='horizontal',padding=0,margin=0)
+
+                Fig.add_layout(legend1, 'below')
+                Fig.legend.click_policy="hide"
+
+            self.Figs = Figs
 
             Fig.xaxis.axis_label = active_x
             Fig.yaxis.axis_label = y_key
 
-            Fig.legend.orientation="horizontal"
-            Fig.legend.location=(0,0)
-            Fig.add_layout(Fig.legend[0], 'below')
-            Fig.legend.click_policy="hide"
+            # Fig.legend.orientation="horizontal"
+            # Fig.legend.location=(0,0)
+            # Fig.add_layout(Fig.legend[0], 'below')
+            # Fig.legend.click_policy="hide"
 
             panel = Panel(child=Fig, title=fig_type.capitalize())
             panels.append(panel)
