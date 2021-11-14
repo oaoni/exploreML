@@ -322,7 +322,7 @@ class ActiveExplore:
         figs = []
         lines = []
 
-        for fig_type in [{'glyph':'square','name':'Scatter','size':1},{'glyph':'line','name':'Line','size':2}]:
+        for fig_type in [{'glyph':'circle_cross','name':'Scatter','size':0.5},{'glyph':'line','name':'Line','size':2}]:
             Fig = figure(width=line_width, height=line_height,toolbar_location='above',
                          x_range=(0,key_meta[active_x]['max']+(key_meta[active_x]['max']*0.05)),
                          y_range=(key_meta[y_key]['min'], key_meta[y_key]['max']+(key_meta[y_key]['max']*0.05)),
