@@ -2,14 +2,15 @@ import numpy as np
 import pandas as pd
 import seaborn as sns
 import math
-from bokeh.io import output_notebook, show, save
-from bokeh.plotting import figure, Figure, output_file, show, reset_output
+import os
+from bokeh.io import show, save
+from bokeh.plotting import Figure, output_file, show, output_notebook
 from bokeh.layouts import column, row
-from bokeh.models import ColorBar, LinearColorMapper, BasicTicker,\
-CustomJS, ColumnDataSource, Toggle, Slider, RadioButtonGroup, Select, Legend,\
-ColorPicker, Panel, Tabs, RangeSlider, FixedTicker, Select, LinearColorMapper
+from bokeh.models import ColorBar, LinearColorMapper, BasicTicker, CustomJS, ColumnDataSource,\
+ Toggle, Slider, RadioButtonGroup, Select, Legend, ColorPicker, Panel, Tabs, RangeSlider,HoverTool
 from bokeh.palettes import all_palettes
 from scipy.cluster.hierarchy import linkage, dendrogram
+from exploreML.models.custom_tools import ResetTool
 
 with open('exploreML/models/active_explore_js/slider_callback.js','r') as f:
     slider_callback_js = f.read()
@@ -21,38 +22,43 @@ class ActiveExplore:
 
     """
     Args:
-    data_dict:
-    sampling_dict:
-    is_sym:
-    num_line_plots:
-    clust_methods:
-    init_clust:
-    active_x:
-    row_coord:
-    col_coord:
-    name: name
+    data_dict: dictionary of matrix reconstruction dataframes, key value pairs
+    sampling_dict: dictionary of sampling method and df, key value pairs
+    is_sym: sample the points symmetrically (True or False)
+    num_line_plots: number of line plots
+    clust_methods: cluster methods to incorporate
+    init_clust: cluster method to use initially
+    active_x: column name for active iteration
+    row_coord: column name of the matrix row coordinate
+    col_coord: column name of the matrix col coordinate
+    name: name of activeExplore module
     url: name of output file
-    plot_location: location of plots with respect to heatmap ['below','left','right','above']
+    plot_location: location of line plots with respect to heatmap ['below','left','right','above']
+    row_name: row label on heatmap
+    col_name: col label on heatmap
+    val_name: label for matrix entries
     """
 
     def __init__(self, data_dict, sampling_dict, is_sym=False, num_line_plots=2,
                  clust_methods = ['None','ward','average'], init_clust = 'None',
                  active_x='active_iter', batch_col='batch', row_coord = 'row_idx', col_coord = 'col_idx',
-                 row_name='dim1', col_name='dim2', val_name='query_value',
+                 row_name='dim1', col_name='dim2', val_name='entry_value',hide_heatmap_labels=False,
                  heatmap_colors = 'default', n_colors=10, inds_colors=[1,2,4,5,6,7,8],
                  color_palette='Category10',plot_size=700, line_width=500, line_height=300,
                  name='active explorer', url='active_explorer.html', plot_location='below'):
 
+        self.name = name
+        self.numLinePlots = num_line_plots
+        self.is_sym = is_sym
+
+        # Output file
+        output_file(filename=url, title=name)
+        # output_notebook()
+
+        # Load data
         M = data_dict['M']
         S_train = data_dict['S_train'].values
         sampling_names, sampling_dfs = zip(*sampling_dict.items())
-
-        self.name = name
-        self.numLinePlots = num_line_plots # Parameter for number of line plots
-        self.is_sym = is_sym
-
-        #Output file or output notebook
-        output_file(filename=url, title=name)
 
         # Variables and presets
         meta_vars = dict(rowName=row_name, colName=col_name, valName=val_name,
@@ -60,13 +66,13 @@ class ActiveExplore:
         df_index = M.index
         df_cols = M.columns
 
-        #Colors and palettes
+        # Colors and palettes
         if isinstance(heatmap_colors, sns.palettes._ColorPalette):
             heatmap_colors = heatmap_colors.as_hex()
         else:
             heatmap_colors = sns.diverging_palette(260, 10, n=256).as_hex()
 
-        #Processing inputs
+        # Processing inputs
         marker_size=plot_size/M.shape[0] # Produce appropriate marker size for aspect ratio
         n_samplers = len(sampling_names)
         sampling_titles = {sampler:sampler+' Sampling' for sampler in sampling_names}
@@ -85,75 +91,86 @@ class ActiveExplore:
 
         self.sampling_methods = sampling_methods
 
-        #Precompute the indices for the different clustering methods
+        # Precompute the indices for the different clustering methods
         clust_dict = {method:self._makeClustIndex(M, method) for method in clust_methods}
         self.clust_dict = clust_dict
-        #Active learning data
+
+        # Active learning data
         sampling_data = {sample:self._addIndexCols(df, df_index, df_cols, meta_vars)\
                         for df,sample in zip(sampling_methods,sampling_names)}
-
-        # active_dim = list(sampling_data.values())[0].shape[0]
+        self.sampling_data = sampling_data
 
         samplerCol_meta = pd.concat([sampling_data[sampler].describe().loc[['min','max'],:]\
          for sampler in sampling_names]).describe().to_dict()
+
+        self.samplerCol_meta = samplerCol_meta
 
         # Column source data of mask for each clustering method
         upper_dict = {method:self._makeGImatrix(self._makeMaskUpper(M.iloc[clust_dict[method][0],clust_dict[method][1]]),meta_vars)\
                    .dropna(axis=0).to_dict(orient='list') for method in clust_methods}
 
-        #Collecting the quantitative columns from the sampling data
+        # Collecting the quantitative columns from the sampling data
         quant_options = sampling_methods[0].describe().T.query('std > 0').index.to_list()
 
         line_y_keys = [col for col in quant_options[:self.numLinePlots]]
 
         # Make sources
-        heat_mapper = LinearColorMapper(palette=heatmap_colors,low=M.values.min(), high=M.values.max())
 
-        #Active learning column source data
+        # Active learning column source data
         sampling_sources = {sampler:ColumnDataSource(data.to_dict(orient='list'))\
                         for sampler,data in sampling_data.items()}
 
         upper_source = ColumnDataSource(data=upper_dict[init_clust])
 
         # Initialize sources
-        #GI column source data
+        # GI column source data
         heatmap_source = ColumnDataSource(data=self._makeGImatrix(M, meta_vars).to_dict(orient='list'))
         # Active sources
         active_sources = {sampler:ColumnDataSource({key:[]\
                           for key in sampling_sources[sampler].data.keys()})\
                           for sampler in sampling_names}
-        #Training data source
+        # Training data source
         train_source = ColumnDataSource(self._makeGImatrix(M.where(S_train.astype(bool)), meta_vars)\
         .dropna(axis=0)\
         .to_dict(orient='list'))
 
-        TOOLS = "hover,save,pan,box_zoom,reset,wheel_zoom"
-        p = Figure(title="Active Learning Explorer",frame_width=plot_size, frame_height=plot_size,
-                   tools=TOOLS, tooltips=[('index', '@{} | @{}'.format(row_name,col_name)),(val_name, '@{}'.format(val_name))],
+        TOOLS = "save,box_zoom,reset"
+        p = Figure(title="Active Learning Explorer", frame_width=plot_size, frame_height=plot_size,
+                   tools=TOOLS,
                    toolbar_location='above', x_range=clust_dict[init_clust][3],y_range=clust_dict[init_clust][2][::-1],
                    output_backend="webgl", match_aspect=True)
-        self.clust_dict = clust_dict
 
         p.grid.grid_line_color = None
         p.axis.axis_line_color = None
         p.axis.major_tick_line_color = None
-        p.axis.major_label_text_font_size = "7px"
-        p.axis.major_label_standoff = 0
-        p.xaxis.major_label_orientation = np.pi/3
         p.xaxis.axis_label = col_name
         p.yaxis.axis_label = row_name
 
-        color_bar = ColorBar(color_mapper=heat_mapper, major_label_text_font_size="8px",
+        if hide_heatmap_labels:
+            p.xaxis.major_label_text_font_size = '0pt'  # preferred method for removing tick labels
+            p.yaxis.major_label_text_font_size = '0pt'
+        else:
+            p.axis.major_label_text_font_size = "7px"
+            p.axis.major_label_standoff = 0
+            p.xaxis.major_label_orientation = np.pi/3
+
+        heat_max = M.values.max()
+        heat_min = M.values.min()
+        heat_upper_bound = min(abs(heat_min),abs(heat_max))
+        heat_lower_bound = -heat_upper_bound if heat_min < 0 else heat_min
+
+        heat_mapper = LinearColorMapper(palette=heatmap_colors, low=heat_lower_bound, high=heat_upper_bound)
+
+        color_bar = ColorBar(color_mapper=heat_mapper, major_label_text_font_size="10px",
+                             major_tick_line_color='black',
                              location=(0,0), ticker=BasicTicker(),
                              width=15,label_standoff=7)
 
         self.color_bar = color_bar
         p.add_layout(color_bar, "right")
 
-        mn = color_bar.color_mapper.low.round(1)
-        mx = color_bar.color_mapper.high.round(1)
-
-        range_slider = RangeSlider(start=mn, end=mx, value=(mn,mx), step=(mx-mn)/50, title="Colorbar Range")
+        range_slider = RangeSlider(start=heat_min.round(2), end=heat_max.round(2), title="Colorbar Range",
+                                   value=(heat_lower_bound, heat_upper_bound),step=((heat_max - heat_min)/50).round(3))
         range_slider.js_on_change("value", CustomJS(args=dict(cbar=color_bar),code="""
             console.log('range_slider: value=' + this.value, this.toString())
 
@@ -165,7 +182,6 @@ class ActiveExplore:
 
             cbar.color_mapper.low = low;
             cbar.color_mapper.high = high;
-
         """))
 
         colormap_options = ["default", "plasma", "viridis", "magma", "vlag", "coolwarm", "icefire"]
@@ -181,25 +197,32 @@ class ActiveExplore:
             cbar.color_mapper.palette = cmap_dict[cb_obj.value];
         """))
 
-        #GI Heatmap
-        heatFig = p.rect(x=col_name,y=row_name,height=1,width=1,
+        # GI Heatmap
+        heatFig = p.rect(x=col_name, y=row_name, height=1, width=1,
                source=heatmap_source,
                color={'field': val_name, 'transform': heat_mapper})
         self.heatmap_source = heatmap_source
-
-        heatFigs = {sampler:p.circle_cross(x=col_name, y=row_name, source=active_sources[sampler],\
-                    size=marker_size,color=sampler_color[sampler],line_color=sampler_color[sampler],
-                    line_width=0)\
+        # Active
+        heatFigs = {sampler:p.circle(x=col_name, y=row_name, source=active_sources[sampler], radius=0.5,\
+                    color=sampler_color[sampler], line_color=sampler_color[sampler])\
                     for sampler in sampling_names}
 
-        #Training mask
-        trainFig = p.square_pin(x=col_name,y=row_name,source=train_source,
-                          size=marker_size,color="white")
+        # Training mask
+        trainFig = p.rect(x=col_name, y=row_name, source=train_source,
+                          height=2, width=2, color="white")
         trainFig.visible = False
 
-        #Upper mask
-        upperFig = p.square(x=col_name,y=row_name,source=upper_source,size=marker_size,color="white")
+        # Upper mask
+        upperFig = p.rect(x=col_name, y=row_name, source=upper_source, height=1, width=1, color="white")
         upperFig.visible = False
+
+        p.add_tools(
+            HoverTool(
+                      tooltips=[('index', '@{} | @{}'.format(row_name,col_name)),(val_name, '@{}'.format(val_name))],
+                      mode='mouse',
+                      renderers=[trainFig, heatFig]
+            )
+        )
 
         # List of Lists: [Fig, and dictionary of lineplots for each sampler, tabs] ->
         # for each predefined line_y_keys
@@ -265,6 +288,8 @@ class ActiveExplore:
 
         layout = self._make_layout(heatmap_layout,linePlots, plot_location)
 
+        # show(layout)
+        # self.layout = layout
         save(layout)
 
     def _make_layout(self, heatmap_layout, linePlots, plot_location):
@@ -302,7 +327,32 @@ class ActiveExplore:
                                       plot2=Figs2,
                                       col_meta=samplerCol_meta,
                                       yaxis=Fig.yaxis[0],
-                                      yaxis2=Fig2.yaxis[0]), code=line_callback_js)
+                                      yaxis2=Fig2.yaxis[0]), code="""
+                    console.log('select: value=' + this.value, this.toString())
+
+                    var select = cb_obj.value;
+                    const keys = Object.keys(plot);
+                    var keysLength = keys.length;
+
+                    for (var i = 0; i < keysLength; i++) {
+                      plot[keys[i]].glyph.y.field = select;
+                      plot[keys[i]].data_source.change.emit();
+
+                      plot2[keys[i]].glyph.y.field = select;
+                      plot2[keys[i]].data_source.change.emit();
+                    }
+
+                    var mx = col_meta[select].max + col_meta[select].max * 0.05;
+                    var mn = col_meta[select].min - col_meta[select].max * 0.05;
+
+                    fig.y_range.end = mx;
+                    fig.y_range.start = mn;
+                    yaxis.axis_label = select;
+
+                    fig2.y_range.end = mx;
+                    fig2.y_range.start = mn;
+                    yaxis2.axis_label = select;
+                                      """)
 
         return callback
 
@@ -317,17 +367,19 @@ class ActiveExplore:
     #Line figure
     def _createLinePlot(self, y_key, key_meta, active_x, sampling_names, active_sources, sampler_color, line_width, line_height):
 
-        #Create panels for linear and log tabs
+        #Create panels for linear and scatter tabs
         panels = []
         figs = []
         lines = []
 
-        for fig_type in [{'glyph':'circle_cross','name':'Scatter','size':0.5},{'glyph':'line','name':'Line','size':2}]:
-            Fig = figure(width=line_width, height=line_height,toolbar_location='above',
+        for fig_type in [{'glyph':'circle','name':'Scatter','size':0.5},{'glyph':'line','name':'Line','size':2}]:
+            Fig = Figure(width=line_width, height=line_height,toolbar_location='above',
                          x_range=(0,key_meta[active_x]['max']+(key_meta[active_x]['max']*0.05)),
-                         y_range=(key_meta[y_key]['min'], key_meta[y_key]['max']+(key_meta[y_key]['max']*0.05)),
-                         y_axis_type='linear',output_backend="webgl")
-
+                         y_range=(key_meta[y_key]['min']-(key_meta[y_key]['max']*0.02),
+                         key_meta[y_key]['max']+(key_meta[y_key]['max']*0.05)),
+                         y_axis_type='linear',output_backend="webgl",
+                         tools="save,pan,wheel_zoom")
+                        #"save,pan,wheel_zoom"
             Figs = {sampler:getattr(Fig,fig_type['glyph'])(active_x, y_key,\
                                              source=active_sources[sampler],\
                                              color=sampler_color[sampler],\

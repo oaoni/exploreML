@@ -4,7 +4,7 @@ Interactive bokeh dashboard for analyzing active learning experiments and matrix
 ![Active Explore Demo](data/demo.gif)
 
 ## Requirements
-bokeh == 2.4.0 <br>
+bokeh == 2.4.2 <br>
 
 ## Getting started
 Clone repo and cd into the project directory
