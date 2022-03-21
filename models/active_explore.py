@@ -140,6 +140,7 @@ class ActiveExplore:
                    toolbar_location='above', x_range=clust_dict[init_clust][3],y_range=clust_dict[init_clust][2][::-1],
                    output_backend="webgl", match_aspect=True)
 
+        p.outline_line_color = None
         p.grid.grid_line_color = None
         p.axis.axis_line_color = None
         p.axis.major_tick_line_color = None
@@ -187,6 +188,7 @@ class ActiveExplore:
         colormap_options = ["default", "plasma", "viridis", "magma", "vlag", "coolwarm", "icefire"]
         colormap_dict = {palette:sns.color_palette(palette,n_colors=64).as_hex() for palette in colormap_options[1:]}
         colormap_dict['default'] = heatmap_colors
+        self.colormap_dict = colormap_dict
 
 
         select_colorbar = Select(title="Colorbar Palette:", value="default", options=colormap_options)
@@ -284,7 +286,8 @@ class ActiveExplore:
 
         linePlots = [column(*line) for line in list(zip(line_selects,line_tabs))]
 
-        heatmap_layout = row(p,column(radio_button_group,toggle,sliders,data_toggle,row(train_toggle,train_picker),range_slider,select_colorbar))
+        heatmap_layout = row(column(radio_button_group,toggle,sliders,data_toggle,row(train_toggle,train_picker),range_slider,select_colorbar),
+                             p)
 
         layout = self._make_layout(heatmap_layout,linePlots, plot_location)
 
