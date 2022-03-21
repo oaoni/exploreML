@@ -170,7 +170,7 @@ class ActiveExplore:
         self.color_bar = color_bar
         p.add_layout(color_bar, "right")
 
-        range_slider = RangeSlider(start=heat_min.round(2), end=heat_max.round(2), title="Colorbar Range",
+        range_slider = RangeSlider(start=heat_min.round(2), end=heat_max.round(2), title="Colorbar Range",max_width=300,
                                    value=(heat_lower_bound, heat_upper_bound),step=((heat_max - heat_min)/50).round(3))
         range_slider.js_on_change("value", CustomJS(args=dict(cbar=color_bar),code="""
             console.log('range_slider: value=' + this.value, this.toString())
@@ -191,7 +191,7 @@ class ActiveExplore:
         self.colormap_dict = colormap_dict
 
 
-        select_colorbar = Select(title="Colorbar Palette:", value="default", options=colormap_options)
+        select_colorbar = Select(title="Colorbar Palette:", value="default", options=colormap_options,max_width=300)
         select_colorbar.js_on_change("value", CustomJS(args=dict(cbar=color_bar, cmap_dict=colormap_dict),code="""
             console.log('select: value=' + this.value, this.toString())
 
@@ -239,17 +239,17 @@ class ActiveExplore:
                                         up_source=upper_source, up_dict=upper_dict),code=radio_call_js)
 
         sample_sliders = {sampler:Slider(start=0, end=active_dim, value=0, step=1,\
-                          title=title,width=360)\
+                          title=title,max_width=300)\
                           for sampler,title in zip(sampling_names,sampling_titles)}
 
-        radio_button_group = RadioButtonGroup(labels=[x.capitalize() for x in clust_methods], active=0)
+        radio_button_group = RadioButtonGroup(labels=[x.capitalize() for x in clust_methods], active=0,max_width=300)
 
         slider_js = {sampler:sample_sliders[sampler].js_on_change('value', self._slider_callback(sampler, active_sources, sampling_sources, symMult))\
                      for sampler in sampling_names}
 
         radio_button_group.js_on_click(radio_call)
 
-        toggle = Toggle(label="Lower Triangle (Toggle)", button_type="primary")
+        toggle = Toggle(label="Lower Triangle (Toggle)", button_type="primary",max_width=300)
         toggle.js_on_click(CustomJS(args=dict(plot=upperFig),code="""
             console.log('toggle: active=' + this.active, this.toString())
 
@@ -259,7 +259,7 @@ class ActiveExplore:
 
         #default, primary, success, warning, danger, light
         #Toggle to show and hide training examples
-        train_toggle = Toggle(label="Hide Training (Toggle)", button_type="warning")
+        train_toggle = Toggle(label="Hide Training (Toggle)", button_type="warning",max_width=250)
         train_toggle.js_on_click(CustomJS(args=dict(plot=trainFig),
         code="""
             console.log('toggle: active=' + this.active, this.toString())
@@ -269,7 +269,7 @@ class ActiveExplore:
         with open('exploreML/models/active_explore_js/data_toggle.js','r') as f:
             data_toggle_js = f.read()
 
-        data_toggle = Toggle(label="Show All (Toggle)", button_type="primary")
+        data_toggle = Toggle(label="Show All (Toggle)", button_type="primary",max_width=300)
         data_toggle.js_on_click(CustomJS(args=dict(sliders=sample_sliders, active_dim=\
                                                    active_dim),
         code=data_toggle_js))
@@ -286,7 +286,8 @@ class ActiveExplore:
 
         linePlots = [column(*line) for line in list(zip(line_selects,line_tabs))]
 
-        heatmap_layout = row(column(radio_button_group,toggle,sliders,data_toggle,row(train_toggle,train_picker),range_slider,select_colorbar),
+        heatmap_layout = row(column(radio_button_group,toggle,sliders,data_toggle,
+                             row(train_toggle,train_picker),range_slider,select_colorbar,width=340),
                              p)
 
         layout = self._make_layout(heatmap_layout,linePlots, plot_location)
