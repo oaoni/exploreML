@@ -12,10 +12,13 @@ for (var i = 0; i < keysLength; i++) {
   plot2[keys[i]].data_source.change.emit();
 }
 
-fig.y_range.end = col_meta[select].max;
-fig.y_range.start = col_meta[select].min;
+var mx = col_meta[select].max + col_meta[select].max * 0.05;
+var mn = col_meta[select].min - col_meta[select].max * 0.05;
+
+fig.y_range.end = mx;
+fig.y_range.start = mn;
 yaxis.axis_label = select;
 
-fig2.y_range.end = col_meta[select].max;
-fig2.y_range.start = col_meta[select].min;
+fig2.y_range.end = mx;
+fig2.y_range.start = mn;
 yaxis2.axis_label = select;

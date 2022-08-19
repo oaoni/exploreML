@@ -2,15 +2,15 @@ import numpy as np
 import pandas as pd
 import seaborn as sns
 import math
-import os
 from bokeh.io import show, save
 from bokeh.plotting import Figure, output_file, show, output_notebook
 from bokeh.layouts import column, row
 from bokeh.models import ColorBar, LinearColorMapper, BasicTicker, CustomJS, ColumnDataSource,\
  Toggle, Slider, RadioButtonGroup, Select, Legend, ColorPicker, Panel, Tabs, RangeSlider,HoverTool
+from bokeh.models.widgets import Div
 from bokeh.palettes import all_palettes
 from scipy.cluster.hierarchy import linkage, dendrogram
-from exploreML.models.custom_tools import ResetTool
+import itertools
 
 with open('exploreML/models/active_explore_js/slider_callback.js','r') as f:
     slider_callback_js = f.read()
@@ -45,15 +45,15 @@ class ActiveExplore:
                  row_name='dim1', col_name='dim2', val_name='entry_value',hide_heatmap_labels=False,
                  heatmap_colors = 'default', n_colors=10, inds_colors=[1,2,4,5,6,7,8],
                  color_palette='Category10',plot_size=700, line_width=500, line_height=300,
-                 name='active explorer', url='active_explorer.html', plot_location='below'):
+                 name='active explorer', url='active_explorer.html', plot_location='below',
+                 file_output=True):
 
         self.name = name
         self.numLinePlots = num_line_plots
         self.is_sym = is_sym
-
-        # Output file
-        output_file(filename=url, title=name)
-        # output_notebook()
+        self.row_name = row_name
+        self.col_name = col_name
+        self.plot_size = plot_size
 
         # Load data
         M = data_dict['M']
@@ -81,6 +81,7 @@ class ActiveExplore:
         sampler_color = dict(zip(sampling_names, sampler_palette[:n_samplers]))
 
         active_dim = sampling_dfs[0].shape[0]
+        self.active_dim = active_dim
         if self.is_sym:
             sampling_methods = [self._makeSymAL(sampler, row_coord, col_coord, active_x, batch_col)\
                                 for sampler in sampling_dfs]
@@ -94,6 +95,7 @@ class ActiveExplore:
         # Precompute the indices for the different clustering methods
         clust_dict = {method:self._makeClustIndex(M, method) for method in clust_methods}
         self.clust_dict = clust_dict
+        self.clust_methods = clust_methods
 
         # Active learning data
         sampling_data = {sample:self._addIndexCols(df, df_index, df_cols, meta_vars)\
@@ -108,6 +110,7 @@ class ActiveExplore:
         # Column source data of mask for each clustering method
         upper_dict = {method:self._makeGImatrix(self._makeMaskUpper(M.iloc[clust_dict[method][0],clust_dict[method][1]]),meta_vars)\
                    .dropna(axis=0).to_dict(orient='list') for method in clust_methods}
+        self.upper_dict = upper_dict
 
         # Collecting the quantitative columns from the sampling data
         quant_options = sampling_methods[0].describe().T.query('std > 0').index.to_list()
@@ -121,6 +124,7 @@ class ActiveExplore:
                         for sampler,data in sampling_data.items()}
 
         upper_source = ColumnDataSource(data=upper_dict[init_clust])
+        self.upper_source = upper_source
 
         # Initialize sources
         # GI column source data
@@ -235,19 +239,14 @@ class ActiveExplore:
         with open('exploreML/models/active_explore_js/radio_call.js','r') as f:
             radio_call_js = f.read()
 
-        radio_call = CustomJS(args=dict(methods=clust_methods,clust_dict=clust_dict,plot=p,
-                                        up_source=upper_source, up_dict=upper_dict),code=radio_call_js)
-
-        sample_sliders = {sampler:Slider(start=0, end=active_dim, value=0, step=1,\
+        # TODO: Make step a variable
+        sample_sliders = {sampler:Slider(start=0, end=active_dim, value=0, step=120,\
                           title=title,max_width=300)\
                           for sampler,title in zip(sampling_names,sampling_titles)}
 
-        radio_button_group = RadioButtonGroup(labels=[x.capitalize() for x in clust_methods], active=0,max_width=300)
-
         slider_js = {sampler:sample_sliders[sampler].js_on_change('value', self._slider_callback(sampler, active_sources, sampling_sources, symMult))\
                      for sampler in sampling_names}
-
-        radio_button_group.js_on_click(radio_call)
+        self.sample_sliders = sample_sliders
 
         toggle = Toggle(label="Lower Triangle (Toggle)", button_type="primary",max_width=300)
         toggle.js_on_click(CustomJS(args=dict(plot=upperFig),code="""
@@ -256,6 +255,7 @@ class ActiveExplore:
             plot.visible = cb_obj.active;
 
         """))
+        self.toggle = toggle
 
         #default, primary, success, warning, danger, light
         #Toggle to show and hide training examples
@@ -270,6 +270,7 @@ class ActiveExplore:
             data_toggle_js = f.read()
 
         data_toggle = Toggle(label="Show All (Toggle)", button_type="primary",max_width=300)
+        self.data_toggle = data_toggle
         data_toggle.js_on_click(CustomJS(args=dict(sliders=sample_sliders, active_dim=\
                                                    active_dim),
         code=data_toggle_js))
@@ -282,19 +283,32 @@ class ActiveExplore:
         train_picker = ColorPicker(width=50,color='white')
         train_picker.js_link('color', trainFig.glyph, 'fill_color')
 
-        sliders = column(list(sample_sliders.values()))
+        sliders = column(list(sample_sliders.values()),name='slider_col')
 
         linePlots = [column(*line) for line in list(zip(line_selects,line_tabs))]
 
-        heatmap_layout = row(column(radio_button_group,toggle,sliders,data_toggle,
-                             row(train_toggle,train_picker),range_slider,select_colorbar,width=340),
-                             p)
+        radio_call = CustomJS(args=dict(methods=clust_methods,clust_dict=clust_dict,plot=p,
+                                up_source=upper_source, up_dict=upper_dict),code=radio_call_js)
 
-        layout = self._make_layout(heatmap_layout,linePlots, plot_location)
+        radio_button_group = RadioButtonGroup(labels=[x.capitalize() for x in clust_methods], active=0, max_width=300)
+        radio_button_group.js_on_click(radio_call)
+        self.radio_button_group = radio_button_group
 
-        # show(layout)
-        # self.layout = layout
-        save(layout)
+        toolbar = column(radio_button_group,toggle,sliders,data_toggle,
+                             row(train_toggle,train_picker),
+                             range_slider,select_colorbar,
+                             width=310,name='toolbar', margin=(0,10,0,10))
+        heatmap_layout = row(toolbar,p)
+
+        layout = self._make_layout(heatmap_layout,linePlots,plot_location)
+
+        self.toolbar = toolbar
+        self.layout = layout
+
+        if file_output:
+
+            output_file(filename=url, title=name)
+            save(layout)
 
     def _make_layout(self, heatmap_layout, linePlots, plot_location):
 
@@ -313,7 +327,8 @@ class ActiveExplore:
             layout = column(line_layout, heatmap_layout)
 
         elif plot_location == 'below': # Below
-            layout = column(heatmap_layout,line_layout)
+            # layout = column(heatmap_layout,Div(height=80),line_layout)
+            layout = column(heatmap_layout,Div(height=20),line_layout)
 
         return layout
 
@@ -331,32 +346,8 @@ class ActiveExplore:
                                       plot2=Figs2,
                                       col_meta=samplerCol_meta,
                                       yaxis=Fig.yaxis[0],
-                                      yaxis2=Fig2.yaxis[0]), code="""
-                    console.log('select: value=' + this.value, this.toString())
-
-                    var select = cb_obj.value;
-                    const keys = Object.keys(plot);
-                    var keysLength = keys.length;
-
-                    for (var i = 0; i < keysLength; i++) {
-                      plot[keys[i]].glyph.y.field = select;
-                      plot[keys[i]].data_source.change.emit();
-
-                      plot2[keys[i]].glyph.y.field = select;
-                      plot2[keys[i]].data_source.change.emit();
-                    }
-
-                    var mx = col_meta[select].max + col_meta[select].max * 0.05;
-                    var mn = col_meta[select].min - col_meta[select].max * 0.05;
-
-                    fig.y_range.end = mx;
-                    fig.y_range.start = mn;
-                    yaxis.axis_label = select;
-
-                    fig2.y_range.end = mx;
-                    fig2.y_range.start = mn;
-                    yaxis2.axis_label = select;
-                                      """)
+                                      yaxis2=Fig2.yaxis[0]),
+                                      code=line_callback_js)
 
         return callback
 
